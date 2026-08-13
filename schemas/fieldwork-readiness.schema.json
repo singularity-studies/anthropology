@@ -3,7 +3,7 @@
   "$id": "https://github.com/singularity-studies/anthropology/schemas/fieldwork-readiness.schema.json",
   "title": "Fieldwork readiness record",
   "type": "object",
-  "x-instrument-version": "0.1.0-draft",
+  "x-instrument-version": "0.2.0-draft",
   "additionalProperties": false,
   "required": [
     "readiness_version",
@@ -33,27 +33,43 @@
         "responsible_research_role"
       ],
       "properties": {
-        "ethics_or_research_review": {"$ref": "#/$defs/determination"},
-        "consent_or_lawful_alternative": {"$ref": "#/$defs/determination"},
-        "data_management_plan": {"$ref": "#/$defs/determination"},
-        "privacy_and_deidentification_plan": {"$ref": "#/$defs/determination"},
-        "withdrawal_and_correction_process": {"$ref": "#/$defs/determination"},
-        "nonpublic_access_and_storage_plan": {"$ref": "#/$defs/determination"},
-        "public_release_and_disclosure_review": {"$ref": "#/$defs/determination"},
-        "responsible_research_role": {"$ref": "#/$defs/determination"}
+        "ethics_or_research_review": {"$ref": "#/$defs/readiness_slot"},
+        "consent_or_lawful_alternative": {"$ref": "#/$defs/readiness_slot"},
+        "data_management_plan": {"$ref": "#/$defs/readiness_slot"},
+        "privacy_and_deidentification_plan": {"$ref": "#/$defs/readiness_slot"},
+        "withdrawal_and_correction_process": {"$ref": "#/$defs/readiness_slot"},
+        "nonpublic_access_and_storage_plan": {"$ref": "#/$defs/readiness_slot"},
+        "public_release_and_disclosure_review": {"$ref": "#/$defs/readiness_slot"},
+        "responsible_research_role": {"$ref": "#/$defs/readiness_slot"}
       }
     },
     "external_requirements_notice": {"type": "string", "minLength": 1}
   },
   "$defs": {
-    "determination": {
+    "artifact_reference": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "record_reference", "note"],
+      "required": ["path", "sha256"],
       "properties": {
-        "status": {"type": "string", "enum": ["unresolved", "documented"]},
-        "record_reference": {"type": ["string", "null"]},
-        "note": {"type": "string"}
+        "path": {
+          "type": "string",
+          "pattern": "^governance/determinations/[A-Za-z0-9._-]+\\.json$"
+        },
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "readiness_slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_reference", "note"],
+      "properties": {
+        "record_reference": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/artifact_reference"}
+          ]
+        },
+        "note": {"type": "string", "minLength": 1}
       }
     }
   }

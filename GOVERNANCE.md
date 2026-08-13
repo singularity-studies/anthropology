@@ -14,7 +14,9 @@ The protocol, field-note guide, life-history protocol, ethics and data-governanc
 
 ## Fail-closed decisions
 
-Unresolved readiness means fieldwork is not authorized. Missing release review means participant-derived publication is not authorized. A repository maintainer must not infer approval from silence, prior practice, a passing syntax check, or access to data.
+Unresolved readiness means fieldwork is not authorized. A determination is not satisfied merely because it is described as documented: the readiness slot must resolve to an exact, schema-valid public summary with matching type, version, path, SHA-256, and non-empty rationale. Only `satisfied` and `not_applicable_with_basis` may permit the internal gate; `blocked` and `unresolved` fail closed. Missing or version-incompatible release review means participant-derived publication is not authorized.
+
+The public summary does not reproduce or substantively verify an external source. A repository maintainer must not infer external approval from silence, prior practice, a passing syntax check, access to data, or an internally permitting outcome.
 
 ## Privacy precedence
 

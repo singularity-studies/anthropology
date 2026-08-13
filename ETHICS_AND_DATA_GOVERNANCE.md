@@ -25,13 +25,15 @@ The project is `FIELDWORK_NOT_AUTHORIZED`. Setting `execution_permitted` to `tru
 
 External institutional, legal, community, contractual, or professional requirements remain external. Repository validation cannot grant approval or prove that a determination is substantively adequate.
 
+Each readiness slot may reference only a repository-local, non-sensitive determination summary under `governance/determinations/`, bound by path and SHA-256. The summary records an explicit outcome: `satisfied`, `not_applicable_with_basis`, `blocked`, or `unresolved`. Only the first two can permit the internal gate to proceed. The authoritative external document may remain in its controlled system and must not be copied here merely to satisfy validation.
+
 ## Non-public material
 
 Before collection, the project must define authorized systems, encryption, access roles, retention, deletion, backup, transfer, device, breach-response, and linkage-key controls. This repository is not such a system and must not contain connection details or secrets for one.
 
 ## Public release
 
-Every future file under `public/` requires a sidecar metadata record. Participant-derived artifacts additionally require a versioned public-release record under `governance/public-releases/` that binds the artifact path and SHA-256 digest and records passed disclosure and de-identification reviews. A release record cannot guarantee that disclosure is safe; responsible human review remains required.
+Every future file under `public/` requires a sidecar metadata record validated against its declared schema version. Participant-derived artifacts additionally require a schema-valid, version-matched public-release record under `governance/public-releases/` that binds the artifact path and SHA-256 digest and records passed disclosure and de-identification reviews. A release record cannot guarantee that disclosure is safe; responsible human review remains required.
 
 ## Withdrawal, correction, and privacy incidents
 

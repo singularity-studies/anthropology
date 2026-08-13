@@ -35,4 +35,4 @@ Every methodological record must preserve researcher role and position, access c
 
 ## Readiness boundary
 
-No research involving people is authorized by this draft. Before execution, [`governance/fieldwork-readiness.json`](governance/fieldwork-readiness.json) must pass the repository gate and all applicable external requirements must independently be satisfied. A passing file is documentation of a project decision, not an institutional or legal approval.
+No research involving people is authorized by this draft. Before execution, [`governance/fieldwork-readiness.json`](governance/fieldwork-readiness.json) must resolve all eight slots to exact, version-compatible public determination summaries with internally permitting outcomes, and all applicable external requirements must independently be satisfied. A passing internal gate is documentation of project readiness, not an institutional, legal, community, contractual, or ethics approval.

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/singularity-studies/anthropology/schemas/governance-determination.schema.json",
+  "title": "Public governance determination summary",
+  "type": "object",
+  "x-instrument-version": "0.2.0-draft",
+  "additionalProperties": false,
+  "required": [
+    "determination_version",
+    "determination_id",
+    "determination_type",
+    "outcome",
+    "rationale",
+    "basis_summary",
+    "external_record_reference",
+    "responsible_research_role",
+    "recorded_at",
+    "external_requirements_notice"
+  ],
+  "properties": {
+    "determination_version": {"type": "string", "minLength": 1},
+    "determination_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
+    "determination_type": {
+      "type": "string",
+      "enum": [
+        "ethics_or_research_review",
+        "consent_or_lawful_alternative",
+        "data_management_plan",
+        "privacy_and_deidentification_plan",
+        "withdrawal_and_correction_process",
+        "nonpublic_access_and_storage_plan",
+        "public_release_and_disclosure_review",
+        "responsible_research_role"
+      ]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["satisfied", "not_applicable_with_basis", "blocked", "unresolved"]
+    },
+    "rationale": {"type": "string", "minLength": 1},
+    "basis_summary": {"type": "string", "minLength": 1},
+    "external_record_reference": {"type": ["string", "null"]},
+    "responsible_research_role": {"type": "string", "minLength": 1},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "external_requirements_notice": {"type": "string", "minLength": 1}
+  }
+}

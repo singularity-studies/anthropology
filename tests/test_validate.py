@@ -33,6 +33,56 @@ class TemporaryRepository:
     def close(self) -> None:
         self.temporary_directory.cleanup()
 
+    def readiness(self) -> dict[str, object]:
+        return json.loads(
+            (self.root / "governance/fieldwork-readiness.json").read_text(encoding="utf-8")
+        )
+
+    def write_determination(
+        self,
+        determination_type: str,
+        outcome: str = "satisfied",
+        determination_id: str | None = None,
+    ) -> dict[str, str]:
+        """Create a synthetic governance fixture; this is not real authorization."""
+
+        determination_id = determination_id or f"test-{determination_type}"
+        relative = f"governance/determinations/{determination_id}.json"
+        path = self.root / relative
+        write_json(
+            path,
+            {
+                "determination_version": "0.2.0-draft",
+                "determination_id": determination_id,
+                "determination_type": determination_type,
+                "outcome": outcome,
+                "rationale": "Synthetic temporary fixture; not a real determination.",
+                "basis_summary": "Structural validator test only; no external source asserted.",
+                "external_record_reference": None,
+                "responsible_research_role": "test-only structural role",
+                "recorded_at": "2026-01-01T00:00:00Z",
+                "external_requirements_notice": (
+                    "This temporary fixture does not constitute fieldwork authorization."
+                ),
+            },
+        )
+        return {"path": relative, "sha256": VALIDATE.sha256_file(path)}
+
+    def permitting_readiness(self, outcomes: dict[str, str] | None = None) -> None:
+        """Exercise the internal gate only; never represent actual fieldwork authorization."""
+
+        outcomes = outcomes or {}
+        readiness = self.readiness()
+        readiness["execution_permitted"] = True
+        readiness["status"] = "FIELDWORK_AUTHORIZED"
+        for determination_type in VALIDATE.REQUIRED_DETERMINATIONS:
+            readiness["determinations"][determination_type]["record_reference"] = (
+                self.write_determination(
+                    determination_type, outcomes.get(determination_type, "satisfied")
+                )
+            )
+        write_json(self.root / "governance/fieldwork-readiness.json", readiness)
+
 
 class ScaffoldTests(unittest.TestCase):
     def test_scaffold_passes(self) -> None:
@@ -45,7 +95,6 @@ class ScaffoldTests(unittest.TestCase):
         self.assertFalse(readiness["execution_permitted"])
         self.assertEqual("FIELDWORK_NOT_AUTHORIZED", readiness["status"])
         for determination in readiness["determinations"].values():
-            self.assertEqual("unresolved", determination["status"])
             self.assertIsNone(determination["record_reference"])
 
     def test_scaffold_contains_no_scientific_or_participant_records(self) -> None:
@@ -122,23 +171,84 @@ class ReadinessGateTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.repository.close()
 
-    def test_execution_true_with_unresolved_determinations_fails(self) -> None:
+    def test_execution_true_with_eight_nonresolving_references_fails(self) -> None:
         path = self.repository.root / "governance/fieldwork-readiness.json"
         readiness = json.loads(path.read_text(encoding="utf-8"))
         readiness["execution_permitted"] = True
         readiness["status"] = "FIELDWORK_AUTHORIZED"
+        for determination in VALIDATE.REQUIRED_DETERMINATIONS:
+            readiness["determinations"][determination]["record_reference"] = {
+                "path": f"governance/determinations/fake-{determination}.json",
+                "sha256": "a" * 64,
+            }
         write_json(path, readiness)
         errors = VALIDATE.validate_readiness(self.repository.root)
         for determination in VALIDATE.REQUIRED_DETERMINATIONS:
-            self.assertTrue(any(determination in error for error in errors))
+            matching = [error for error in errors if determination in error]
+            self.assertTrue(any("does not resolve" in error for error in matching))
 
-    def test_documented_determination_requires_record_reference(self) -> None:
-        path = self.repository.root / "governance/fieldwork-readiness.json"
-        readiness = json.loads(path.read_text(encoding="utf-8"))
-        readiness["determinations"]["data_management_plan"]["status"] = "documented"
-        write_json(path, readiness)
+    def test_blocked_determination_fails_execution_gate(self) -> None:
+        self.repository.permitting_readiness({"data_management_plan": "blocked"})
         errors = VALIDATE.validate_readiness(self.repository.root)
-        self.assertTrue(any("documented status requires" in error for error in errors))
+        self.assertTrue(any("outcome 'blocked' does not permit execution" in error for error in errors))
+
+    def test_determination_under_wrong_readiness_type_fails(self) -> None:
+        readiness = self.repository.readiness()
+        readiness["determinations"]["data_management_plan"]["record_reference"] = (
+            self.repository.write_determination("privacy_and_deidentification_plan")
+        )
+        write_json(self.repository.root / "governance/fieldwork-readiness.json", readiness)
+        errors = VALIDATE.validate_readiness(self.repository.root)
+        self.assertTrue(any("type does not match readiness slot" in error for error in errors))
+
+    def test_tampered_determination_fails_hash_binding(self) -> None:
+        readiness = self.repository.readiness()
+        reference = self.repository.write_determination("data_management_plan")
+        readiness["determinations"]["data_management_plan"]["record_reference"] = reference
+        write_json(self.repository.root / "governance/fieldwork-readiness.json", readiness)
+        determination_path = self.repository.root / reference["path"]
+        record = json.loads(determination_path.read_text(encoding="utf-8"))
+        record["rationale"] = "Tampered after the readiness digest was recorded."
+        write_json(determination_path, record)
+        errors = VALIDATE.validate_readiness(self.repository.root)
+        self.assertTrue(any("determination SHA-256 mismatch" in error for error in errors))
+
+    def test_determination_version_mismatch_fails(self) -> None:
+        readiness = self.repository.readiness()
+        reference = self.repository.write_determination("data_management_plan")
+        determination_path = self.repository.root / reference["path"]
+        record = json.loads(determination_path.read_text(encoding="utf-8"))
+        record["determination_version"] = "test-mismatch"
+        write_json(determination_path, record)
+        reference["sha256"] = VALIDATE.sha256_file(determination_path)
+        readiness["determinations"]["data_management_plan"]["record_reference"] = reference
+        write_json(self.repository.root / "governance/fieldwork-readiness.json", readiness)
+        errors = VALIDATE.validate_readiness(self.repository.root)
+        self.assertTrue(
+            any("determination_version does not match its schema" in error for error in errors)
+        )
+
+    def test_empty_determination_rationale_fails_schema(self) -> None:
+        readiness = self.repository.readiness()
+        reference = self.repository.write_determination("data_management_plan")
+        determination_path = self.repository.root / reference["path"]
+        record = json.loads(determination_path.read_text(encoding="utf-8"))
+        record["rationale"] = ""
+        write_json(determination_path, record)
+        reference["sha256"] = VALIDATE.sha256_file(determination_path)
+        readiness["determinations"]["data_management_plan"]["record_reference"] = reference
+        write_json(self.repository.root / "governance/fieldwork-readiness.json", readiness)
+        errors = VALIDATE.validate_readiness(self.repository.root)
+        self.assertTrue(any("rationale: string is too short" in error for error in errors))
+
+    def test_eight_permitting_test_determinations_satisfy_internal_gate_only(self) -> None:
+        self.repository.permitting_readiness(
+            {"ethics_or_research_review": "not_applicable_with_basis"}
+        )
+        errors = VALIDATE.validate_readiness(self.repository.root)
+        self.assertEqual([], errors)
+        source = TemporaryRepository.permitting_readiness.__doc__ or ""
+        self.assertIn("never represent actual fieldwork authorization", source)
 
     def test_readiness_version_must_match_schema(self) -> None:
         path = self.repository.root / "governance/fieldwork-readiness.json"
@@ -222,7 +332,7 @@ class PublicReleaseGateTests(unittest.TestCase):
         write_json(
             Path(str(artifact) + ".metadata.json"),
             {
-                "metadata_version": "test-only",
+                "metadata_version": "0.2.0-draft",
                 "artifact_path": "public/test-only-output.txt",
                 "participant_derived": True,
                 "release_record_id": "missing-release",
@@ -237,7 +347,7 @@ class PublicReleaseGateTests(unittest.TestCase):
         write_json(
             Path(str(artifact) + ".metadata.json"),
             {
-                "metadata_version": "test-only",
+                "metadata_version": "0.2.0-draft",
                 "artifact_path": "public/test-only-output.txt",
                 "participant_derived": True,
                 "release_record_id": "test-release",
@@ -246,7 +356,7 @@ class PublicReleaseGateTests(unittest.TestCase):
         write_json(
             self.repository.root / "governance/public-releases/test-release.json",
             {
-                "release_record_version": "test-only",
+                "release_record_version": "0.2.0-draft",
                 "release_record_id": "test-release",
                 "artifact_path": "public/test-only-output.txt",
                 "artifact_sha256": VALIDATE.sha256_file(artifact),
@@ -259,8 +369,44 @@ class PublicReleaseGateTests(unittest.TestCase):
             },
         )
         errors = VALIDATE.validate_public_release(self.repository.root)
-        self.assertTrue(any("review has not passed" in error for error in errors))
-        self.assertTrue(any("not cleared" in error for error in errors))
+        self.assertTrue(any("value must equal 'passed'" in error for error in errors))
+        self.assertTrue(any("value must equal 'cleared_for_public_release'" in error for error in errors))
+
+    def test_public_artifact_metadata_version_mismatch_fails(self) -> None:
+        artifact = self.repository.root / "public/test-only-output.txt"
+        artifact.write_text("No participant content; structural fixture only.\n", encoding="utf-8")
+        write_json(
+            Path(str(artifact) + ".metadata.json"),
+            {
+                "metadata_version": "test-mismatch",
+                "artifact_path": "public/test-only-output.txt",
+                "participant_derived": False,
+                "release_record_id": None,
+            },
+        )
+        errors = VALIDATE.validate_public_release(self.repository.root)
+        self.assertTrue(any("metadata_version does not match its schema" in error for error in errors))
+
+    def test_public_release_record_version_mismatch_fails(self) -> None:
+        write_json(
+            self.repository.root / "governance/public-releases/test-release.json",
+            {
+                "release_record_version": "test-mismatch",
+                "release_record_id": "test-release",
+                "artifact_path": "public/test-only-output.txt",
+                "artifact_sha256": "a" * 64,
+                "participant_derived": True,
+                "disclosure_review": "passed",
+                "deidentification_review": "passed",
+                "responsible_research_role": "test-only role",
+                "reviewed_at": "2026-01-01T00:00:00Z",
+                "status": "cleared_for_public_release",
+            },
+        )
+        errors = VALIDATE.validate_public_release(self.repository.root)
+        self.assertTrue(
+            any("release_record_version does not match its schema" in error for error in errors)
+        )
 
 
 if __name__ == "__main__":

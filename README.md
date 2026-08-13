@@ -40,7 +40,7 @@ Never commit identifiable or potentially re-identifiable human-subject raw data 
 - [`FIELDNOTE_GUIDE.md`](FIELDNOTE_GUIDE.md): situated observation and reflexive field-note method
 - [`LIFE_HISTORY_PROTOCOL.md`](LIFE_HISTORY_PROTOCOL.md): lived change over time
 - [`ETHICS_AND_DATA_GOVERNANCE.md`](ETHICS_AND_DATA_GOVERNANCE.md): privacy, consent, withdrawal, storage, and incident rules
-- [`governance/fieldwork-readiness.json`](governance/fieldwork-readiness.json): fail-closed readiness state
+- [`governance/fieldwork-readiness.json`](governance/fieldwork-readiness.json): fail-closed readiness state with byte-bound public determination references
 - [`public/`](public/): future cleared derivative outputs only
 - [`schemas/`](schemas/): distinct blank methodological and governance contracts
 - [`scripts/validate.py`](scripts/validate.py): lightweight fail-closed checks
@@ -55,3 +55,5 @@ python -m unittest discover -s tests -v
 ```
 
 Automated guards are necessary but not sufficient. They do not guarantee de-identification, ethical acceptability, lawful processing, valid consent, or safe public release.
+
+An internal readiness gate can pass only when all eight slots resolve by repository-local path and SHA-256 to version-compatible, non-sensitive determination summaries with permitting outcomes. This still cannot grant, replace, or substantively validate any external approval.

@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this research infrastructure, cite the repository version you used."
 title: "Anthropology of the Singularity research infrastructure"
 type: software
-version: "0.1.0-draft"
+version: "0.2.0-draft"
 authors:
   - name: "Singularity Studies"
 repository-code: "https://github.com/singularity-studies/anthropology"

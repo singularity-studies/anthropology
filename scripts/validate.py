@@ -34,11 +34,13 @@ REQUIRED_DIRECTORIES = (
     "tests",
     "docs",
     "governance",
+    "governance/determinations",
     "governance/public-releases",
 )
 
 REQUIRED_SCHEMAS = (
     "schemas/fieldwork-readiness.schema.json",
+    "schemas/governance-determination.schema.json",
     "schemas/field-note.schema.json",
     "schemas/life-history.schema.json",
     "schemas/public-artifact.schema.json",
@@ -119,6 +121,7 @@ SCIENTIFIC_RECORD_SUFFIXES = (
 SCHEMA_VERSION_RE = re.compile(r"Schema bundle version:\s*`([^`]+)`")
 RELEASE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
+PERMITTING_OUTCOMES = {"satisfied", "not_applicable_with_basis"}
 
 
 def read_json(path: Path) -> Any:
@@ -136,6 +139,135 @@ def sha256_file(path: Path) -> str:
 
 def normalize_component(value: str) -> str:
     return re.sub(r"[\s_]+", "-", value.casefold()).strip("-")
+
+
+def _type_matches(instance: Any, expected: str) -> bool:
+    if expected == "object":
+        return isinstance(instance, dict)
+    if expected == "array":
+        return isinstance(instance, list)
+    if expected == "string":
+        return isinstance(instance, str)
+    if expected == "null":
+        return instance is None
+    if expected == "boolean":
+        return isinstance(instance, bool)
+    return False
+
+
+def _resolve_schema_ref(root_schema: dict[str, Any], reference: str) -> Any:
+    if not reference.startswith("#/"):
+        raise ValueError(f"unsupported schema reference: {reference}")
+    current: Any = root_schema
+    for token in reference[2:].split("/"):
+        current = current[token.replace("~1", "/").replace("~0", "~")]
+    return current
+
+
+def _format_matches(value: str, format_name: str) -> bool:
+    if format_name != "date-time":
+        return True
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return "T" in value and parsed.tzinfo is not None
+    except ValueError:
+        return False
+
+
+def validate_contract(
+    instance: Any,
+    schema: Any,
+    location: str = "$",
+    root_schema: dict[str, Any] | None = None,
+) -> list[str]:
+    """Validate the dependency-free JSON Schema subset used by this repository."""
+
+    if not isinstance(schema, dict):
+        return [] if schema is True else [f"{location}: schema rejected value"]
+    if root_schema is None:
+        root_schema = schema
+    if "$ref" in schema:
+        try:
+            target = _resolve_schema_ref(root_schema, schema["$ref"])
+        except (KeyError, TypeError, ValueError) as exc:
+            return [f"{location}: invalid schema reference: {exc}"]
+        return validate_contract(instance, target, location, root_schema)
+
+    errors: list[str] = []
+    if "allOf" in schema:
+        for subschema in schema["allOf"]:
+            errors.extend(validate_contract(instance, subschema, location, root_schema))
+    if "anyOf" in schema and not any(
+        not validate_contract(instance, subschema, location, root_schema)
+        for subschema in schema["anyOf"]
+    ):
+        errors.append(f"{location}: value does not satisfy any allowed schema")
+    if "if" in schema and not validate_contract(instance, schema["if"], location, root_schema):
+        errors.extend(validate_contract(instance, schema.get("then", {}), location, root_schema))
+
+    expected_type = schema.get("type")
+    if expected_type is not None:
+        allowed = expected_type if isinstance(expected_type, list) else [expected_type]
+        if not any(_type_matches(instance, expected) for expected in allowed):
+            errors.append(f"{location}: expected type {allowed}, got {type(instance).__name__}")
+            return errors
+    if "const" in schema and instance != schema["const"]:
+        errors.append(f"{location}: value must equal {schema['const']!r}")
+    if "enum" in schema and instance not in schema["enum"]:
+        errors.append(f"{location}: value is not in the allowed enum")
+
+    if isinstance(instance, dict):
+        for field in schema.get("required", []):
+            if field not in instance:
+                errors.append(f"{location}: missing required field {field!r}")
+        properties = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            for field in instance:
+                if field not in properties:
+                    errors.append(f"{location}: unexpected field {field!r}")
+        for field, field_schema in properties.items():
+            if field in instance:
+                errors.extend(
+                    validate_contract(instance[field], field_schema, f"{location}.{field}", root_schema)
+                )
+
+    if isinstance(instance, list):
+        if len(instance) < schema.get("minItems", 0):
+            errors.append(f"{location}: array has fewer than {schema['minItems']} items")
+        if "maxItems" in schema and len(instance) > schema["maxItems"]:
+            errors.append(f"{location}: array has more than {schema['maxItems']} items")
+        if schema.get("uniqueItems"):
+            encoded = [json.dumps(item, sort_keys=True) for item in instance]
+            if len(encoded) != len(set(encoded)):
+                errors.append(f"{location}: array items must be unique")
+        if "items" in schema:
+            for index, item in enumerate(instance):
+                errors.extend(
+                    validate_contract(item, schema["items"], f"{location}[{index}]", root_schema)
+                )
+
+    if isinstance(instance, str):
+        if len(instance) < schema.get("minLength", 0):
+            errors.append(f"{location}: string is too short")
+        pattern = schema.get("pattern")
+        if pattern and re.search(pattern, instance) is None:
+            errors.append(f"{location}: string does not match required pattern")
+        format_name = schema.get("format")
+        if format_name and not _format_matches(instance, format_name):
+            errors.append(f"{location}: invalid {format_name}")
+    return errors
+
+
+def resolve_repository_file(root: Path, relative: Any, location: str) -> tuple[Path | None, list[str]]:
+    if not isinstance(relative, str) or not relative or "\\" in relative:
+        return None, [f"{location}: path must be a non-empty repository-relative POSIX path"]
+    candidate = (root / relative).resolve()
+    root_resolved = root.resolve()
+    if candidate != root_resolved and root_resolved not in candidate.parents:
+        return None, [f"{location}: path escapes the repository"]
+    if not candidate.is_file():
+        return None, [f"{location}: referenced file does not resolve: {relative}"]
+    return candidate, []
 
 
 def repository_paths(root: Path) -> list[Path]:
@@ -222,75 +354,91 @@ def validate_readiness(root: Path) -> list[str]:
         return [f"{relative}: readiness record must be an object"]
 
     errors: list[str] = []
-    expected_top_fields = {
-        "readiness_version",
-        "status",
-        "execution_permitted",
-        "determinations",
-        "external_requirements_notice",
-    }
-    unexpected_top_fields = set(record) - expected_top_fields
-    missing_top_fields = expected_top_fields - set(record)
-    if unexpected_top_fields:
-        errors.append(f"{relative}: unexpected fields: {sorted(unexpected_top_fields)}")
-    if missing_top_fields:
-        errors.append(f"{relative}: missing fields: {sorted(missing_top_fields)}")
     schema_path = root / "schemas/fieldwork-readiness.schema.json"
-    if schema_path.is_file():
-        try:
-            schema = read_json(schema_path)
-        except json.JSONDecodeError:
-            schema = {}
-        if isinstance(schema, dict) and record.get("readiness_version") != schema.get(
-            "x-instrument-version"
-        ):
-            errors.append(f"{relative}: readiness_version does not match its schema")
+    determination_schema_path = root / "schemas/governance-determination.schema.json"
+    try:
+        schema = read_json(schema_path)
+        determination_schema = read_json(determination_schema_path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"{relative}: cannot load readiness schemas: {exc}"]
+    errors.extend(validate_contract(record, schema, relative))
+    readiness_version = schema.get("x-instrument-version")
+    determination_version = determination_schema.get("x-instrument-version")
+    if record.get("readiness_version") != readiness_version:
+        errors.append(f"{relative}: readiness_version does not match its schema")
+    if readiness_version != determination_version:
+        errors.append(f"{relative}: readiness and determination schema versions are incompatible")
+
     permitted = record.get("execution_permitted")
     status = record.get("status")
-    if not isinstance(permitted, bool):
-        errors.append(f"{relative}: execution_permitted must be boolean")
     if permitted is False and status != "FIELDWORK_NOT_AUTHORIZED":
         errors.append(
             f"{relative}: execution_permitted=false requires FIELDWORK_NOT_AUTHORIZED"
         )
     if permitted is True and status != "FIELDWORK_AUTHORIZED":
         errors.append(f"{relative}: execution_permitted=true requires FIELDWORK_AUTHORIZED")
-    if not isinstance(record.get("readiness_version"), str) or not record["readiness_version"]:
-        errors.append(f"{relative}: readiness_version is required")
-    notice = record.get("external_requirements_notice")
-    if not isinstance(notice, str) or not notice.strip():
-        errors.append(f"{relative}: external requirements notice is required")
-
     determinations = record.get("determinations")
     if not isinstance(determinations, dict):
         return errors + [f"{relative}: determinations must be an object"]
-    unknown = set(determinations) - set(REQUIRED_DETERMINATIONS)
-    if unknown:
-        errors.append(f"{relative}: unexpected determinations: {sorted(unknown)}")
+
     for name in REQUIRED_DETERMINATIONS:
-        determination = determinations.get(name)
+        slot = determinations.get(name)
         location = f"{relative}: determination {name!r}"
-        if not isinstance(determination, dict):
+        if not isinstance(slot, dict):
             errors.append(f"{location} is required")
             continue
-        expected_determination_fields = {"status", "record_reference", "note"}
-        if set(determination) != expected_determination_fields:
-            errors.append(f"{location} fields do not match the versioned contract")
-        determination_status = determination.get("status")
-        reference = determination.get("record_reference")
-        if determination_status not in {"unresolved", "documented"}:
-            errors.append(f"{location} has invalid status")
-        if determination_status == "unresolved" and reference is not None:
-            errors.append(f"{location} unresolved status requires a null record_reference")
-        if determination_status == "documented" and (
-            not isinstance(reference, str) or not reference.strip()
+        reference = slot.get("record_reference")
+        if reference is None:
+            if permitted is True:
+                errors.append(f"{location} does not resolve to a permitting determination")
+            continue
+        if not isinstance(reference, dict):
+            if permitted is True:
+                errors.append(f"{location} does not resolve to a permitting determination")
+            continue
+
+        reference_path = reference.get("path")
+        determination_path, path_errors = resolve_repository_file(
+            root, reference_path, f"{location} record_reference"
+        )
+        errors.extend(path_errors)
+        if isinstance(reference_path, str) and not re.fullmatch(
+            r"governance/determinations/[A-Za-z0-9._-]+\.json", reference_path
         ):
-            errors.append(f"{location} documented status requires a record_reference")
-        if not isinstance(determination.get("note"), str):
-            errors.append(f"{location} requires a note string")
-        if permitted is True and determination_status != "documented":
+            errors.append(f"{location}: record_reference must target governance/determinations/")
+        digest = reference.get("sha256")
+        if determination_path is not None and isinstance(digest, str) and SHA256_RE.fullmatch(
+            digest
+        ):
+            actual_digest = sha256_file(determination_path)
+            if actual_digest != digest:
+                errors.append(f"{location}: determination SHA-256 mismatch")
+        if determination_path is None:
+            if permitted is True:
+                errors.append(f"{location} does not resolve to a permitting determination")
+            continue
+        try:
+            determination = read_json(determination_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"{location}: invalid determination JSON: {exc}")
+            continue
+        record_location = determination_path.relative_to(root).as_posix()
+        determination_errors = validate_contract(
+            determination, determination_schema, record_location
+        )
+        errors.extend(determination_errors)
+        if not isinstance(determination, dict):
+            continue
+        if determination.get("determination_version") != determination_version:
+            errors.append(f"{record_location}: determination_version does not match its schema")
+        if determination.get("determination_type") != name:
+            errors.append(f"{location}: referenced determination type does not match readiness slot")
+        expected_id = determination_path.stem
+        if determination.get("determination_id") != expected_id:
+            errors.append(f"{record_location}: determination_id does not match its filename")
+        if permitted is True and determination.get("outcome") not in PERMITTING_OUTCOMES:
             errors.append(
-                f"{location} must be documented before execution_permitted can be true"
+                f"{location}: outcome {determination.get('outcome')!r} does not permit execution"
             )
     return errors
 
@@ -354,50 +502,30 @@ def validate_methodological_separation(root: Path) -> list[str]:
 
 
 def validate_release_record(
-    record: Any, relative: str, expected_id: str | None = None
+    record: Any,
+    relative: str,
+    schema: dict[str, Any],
+    expected_id: str | None = None,
 ) -> list[str]:
+    errors = validate_contract(record, schema, relative)
     if not isinstance(record, dict):
-        return [f"{relative}: public-release record must be an object"]
-    errors: list[str] = []
+        return errors
+    schema_version = schema.get("x-instrument-version")
+    if record.get("release_record_version") != schema_version:
+        errors.append(f"{relative}: release_record_version does not match its schema")
     record_id = record.get("release_record_id")
-    if not isinstance(record_id, str) or not RELEASE_ID_RE.fullmatch(record_id):
-        errors.append(f"{relative}: invalid release_record_id")
     if expected_id is not None and record_id != expected_id:
         errors.append(f"{relative}: release_record_id does not match its filename")
-    artifact_path = record.get("artifact_path")
-    if not isinstance(artifact_path, str) or not artifact_path.startswith("public/"):
-        errors.append(f"{relative}: artifact_path must identify a public/ artifact")
-    digest = record.get("artifact_sha256")
-    if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
-        errors.append(f"{relative}: artifact_sha256 must be a lowercase SHA-256 digest")
-    if record.get("participant_derived") is not True:
-        errors.append(f"{relative}: participant_derived must be true")
-    if record.get("disclosure_review") != "passed":
-        errors.append(f"{relative}: disclosure review has not passed")
-    if record.get("deidentification_review") != "passed":
-        errors.append(f"{relative}: de-identification review has not passed")
-    if record.get("status") != "cleared_for_public_release":
-        errors.append(f"{relative}: release status is not cleared_for_public_release")
-    if not isinstance(record.get("release_record_version"), str) or not record[
-        "release_record_version"
-    ]:
-        errors.append(f"{relative}: release_record_version is required")
-    if not isinstance(record.get("responsible_research_role"), str) or not record[
-        "responsible_research_role"
-    ].strip():
-        errors.append(f"{relative}: responsible_research_role is required")
-    reviewed_at = record.get("reviewed_at")
-    try:
-        parsed = datetime.fromisoformat(reviewed_at.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            raise ValueError
-    except (AttributeError, ValueError):
-        errors.append(f"{relative}: reviewed_at must be a timezone-aware date-time")
     return errors
 
 
 def validate_public_release(root: Path) -> list[str]:
     errors: list[str] = []
+    try:
+        metadata_schema = read_json(root / "schemas/public-artifact.schema.json")
+        release_schema = read_json(root / "schemas/public-release.schema.json")
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"public-release validation schemas cannot be loaded: {exc}"]
     release_root = root / "governance/public-releases"
     releases: dict[str, dict[str, Any]] = {}
     if release_root.is_dir():
@@ -408,7 +536,7 @@ def validate_public_release(root: Path) -> list[str]:
             except json.JSONDecodeError as exc:
                 errors.append(f"{relative}: invalid JSON: {exc}")
                 continue
-            errors.extend(validate_release_record(record, relative, path.stem))
+            errors.extend(validate_release_record(record, relative, release_schema, path.stem))
             if isinstance(record, dict) and isinstance(record.get("release_record_id"), str):
                 releases[record["release_record_id"]] = record
 
@@ -439,14 +567,13 @@ def validate_public_release(root: Path) -> list[str]:
         if not isinstance(metadata, dict):
             errors.append(f"{metadata_relative}: metadata must be an object")
             continue
+        errors.extend(validate_contract(metadata, metadata_schema, metadata_relative))
+        if metadata.get("metadata_version") != metadata_schema.get("x-instrument-version"):
+            errors.append(f"{metadata_relative}: metadata_version does not match its schema")
         if metadata.get("artifact_path") != artifact_relative:
             errors.append(f"{metadata_relative}: artifact_path does not match its artifact")
         participant_derived = metadata.get("participant_derived")
         release_id = metadata.get("release_record_id")
-        if not isinstance(metadata.get("metadata_version"), str) or not metadata[
-            "metadata_version"
-        ]:
-            errors.append(f"{metadata_relative}: metadata_version is required")
         if not isinstance(participant_derived, bool):
             errors.append(f"{metadata_relative}: participant_derived must be boolean")
             continue

@@ -3,7 +3,7 @@
   "$id": "https://github.com/singularity-studies/anthropology/schemas/public-release.schema.json",
   "title": "Participant-derived public-release record",
   "type": "object",
-  "x-instrument-version": "0.1.0-draft",
+  "x-instrument-version": "0.2.0-draft",
   "additionalProperties": false,
   "required": [
     "release_record_version",

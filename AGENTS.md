@@ -14,6 +14,8 @@ These instructions apply to the entire repository.
 - The default and current status is `FIELDWORK_NOT_AUTHORIZED` with `execution_permitted = false`.
 - Do not represent research involving people as authorized unless the readiness artifact passes validation and all applicable external requirements have actually been met.
 - Repository validation checks record completeness, not the substantive validity of an external ethics, legal, consent, or institutional determination.
+- A readiness slot is unresolved unless its repository-local public determination record exists, validates, matches the slot identity and schema version, and matches the recorded SHA-256. A non-empty string is never sufficient.
+- Only explicit `satisfied` or `not_applicable_with_basis` outcomes may pass the internal execution gate. `blocked` and `unresolved` outcomes fail closed.
 
 ## Methodological integrity
 
@@ -33,6 +35,7 @@ These instructions apply to the entire repository.
 ## Public release
 
 - Every future public artifact needs metadata. Participant-derived material additionally needs a valid versioned release record with disclosure and de-identification review results and a matching content hash.
+- Metadata and release-record versions must match their applicable schemas; arbitrary non-empty versions are invalid.
 - Treat automated path, extension, and pattern checks as limited safeguards, never a guarantee of safety.
 
 ## Required checks
