@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/singularity-studies/anthropology/schemas/public-release.schema.json",
+  "title": "Participant-derived public-release record",
+  "type": "object",
+  "x-instrument-version": "0.1.0-draft",
+  "additionalProperties": false,
+  "required": [
+    "release_record_version",
+    "release_record_id",
+    "artifact_path",
+    "artifact_sha256",
+    "participant_derived",
+    "disclosure_review",
+    "deidentification_review",
+    "responsible_research_role",
+    "reviewed_at",
+    "status"
+  ],
+  "properties": {
+    "release_record_version": {"type": "string", "minLength": 1},
+    "release_record_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
+    "artifact_path": {"type": "string", "pattern": "^public/"},
+    "artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "participant_derived": {"const": true},
+    "disclosure_review": {"const": "passed"},
+    "deidentification_review": {"const": "passed"},
+    "responsible_research_role": {"type": "string", "minLength": 1},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "status": {"const": "cleared_for_public_release"}
+  }
+}

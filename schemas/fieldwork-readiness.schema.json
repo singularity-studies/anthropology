@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/singularity-studies/anthropology/schemas/fieldwork-readiness.schema.json",
+  "title": "Fieldwork readiness record",
+  "type": "object",
+  "x-instrument-version": "0.1.0-draft",
+  "additionalProperties": false,
+  "required": [
+    "readiness_version",
+    "status",
+    "execution_permitted",
+    "determinations",
+    "external_requirements_notice"
+  ],
+  "properties": {
+    "readiness_version": {"type": "string", "minLength": 1},
+    "status": {
+      "type": "string",
+      "enum": ["FIELDWORK_NOT_AUTHORIZED", "FIELDWORK_AUTHORIZED"]
+    },
+    "execution_permitted": {"type": "boolean"},
+    "determinations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ethics_or_research_review",
+        "consent_or_lawful_alternative",
+        "data_management_plan",
+        "privacy_and_deidentification_plan",
+        "withdrawal_and_correction_process",
+        "nonpublic_access_and_storage_plan",
+        "public_release_and_disclosure_review",
+        "responsible_research_role"
+      ],
+      "properties": {
+        "ethics_or_research_review": {"$ref": "#/$defs/determination"},
+        "consent_or_lawful_alternative": {"$ref": "#/$defs/determination"},
+        "data_management_plan": {"$ref": "#/$defs/determination"},
+        "privacy_and_deidentification_plan": {"$ref": "#/$defs/determination"},
+        "withdrawal_and_correction_process": {"$ref": "#/$defs/determination"},
+        "nonpublic_access_and_storage_plan": {"$ref": "#/$defs/determination"},
+        "public_release_and_disclosure_review": {"$ref": "#/$defs/determination"},
+        "responsible_research_role": {"$ref": "#/$defs/determination"}
+      }
+    },
+    "external_requirements_notice": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "determination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "record_reference", "note"],
+      "properties": {
+        "status": {"type": "string", "enum": ["unresolved", "documented"]},
+        "record_reference": {"type": ["string", "null"]},
+        "note": {"type": "string"}
+      }
+    }
+  }
+}
