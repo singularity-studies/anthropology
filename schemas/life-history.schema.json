@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/singularity-studies/anthropology/schemas/life-history.schema.json",
+  "title": "Blank life-history methodological record",
+  "type": "object",
+  "x-instrument-version": "0.2.0-draft",
+  "additionalProperties": false,
+  "required": [
+    "record_type",
+    "instrument_version",
+    "methodological_record_id",
+    "temporal_design",
+    "engagement_dates",
+    "change_over_time_scope",
+    "observation",
+    "participant_account",
+    "researcher_interpretation",
+    "analytic_memo",
+    "reflexivity"
+  ],
+  "properties": {
+    "record_type": {"const": "life_history"},
+    "instrument_version": {"type": "string", "minLength": 1},
+    "methodological_record_id": {"type": "string", "minLength": 1},
+    "temporal_design": {
+      "type": "string",
+      "enum": ["longitudinal", "retrospective_single_encounter", "other_explicit"]
+    },
+    "engagement_dates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "format": "date"}
+    },
+    "change_over_time_scope": {"type": "string", "minLength": 1},
+    "observation": {"type": "string"},
+    "participant_account": {"type": "string"},
+    "researcher_interpretation": {"type": "string"},
+    "analytic_memo": {"type": "string"},
+    "reflexivity": {"$ref": "#/$defs/reflexivity"}
+  },
+  "$defs": {
+    "reflexivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "researcher_role_position",
+        "access_conditions",
+        "field_relationship_change",
+        "interpretive_uncertainty",
+        "methodological_change"
+      ],
+      "properties": {
+        "researcher_role_position": {"type": "string"},
+        "access_conditions": {"type": "string"},
+        "field_relationship_change": {"type": "string"},
+        "interpretive_uncertainty": {"type": "string"},
+        "methodological_change": {"type": "string"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"temporal_design": {"const": "longitudinal"}},
+        "required": ["temporal_design"]
+      },
+      "then": {
+        "properties": {"engagement_dates": {"minItems": 2}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"temporal_design": {"const": "retrospective_single_encounter"}},
+        "required": ["temporal_design"]
+      },
+      "then": {
+        "properties": {"engagement_dates": {"minItems": 1, "maxItems": 1}}
+      }
+    }
+  ]
+}

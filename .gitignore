@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+
+# Defense in depth only; validator and human review remain required.
+raw-data/
+raw_data/
+participants/
+recordings/
+raw-transcripts/
+raw_transcripts/
+consent-records/
+consent_records/
+recruitment-lists/
+linkage-keys/

@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this research infrastructure, cite the repository version you used."
+title: "Anthropology of the Singularity research infrastructure"
+type: software
+version: "0.2.0-draft"
+authors:
+  - name: "Singularity Studies"
+repository-code: "https://github.com/singularity-studies/anthropology"
+abstract: >-
+  Ethics-first, versioned infrastructure for longitudinal ethnography of lived
+  human transition in AI-mediated sociotechnical systems. This scaffold contains
+  no participant data, field-site data, ethnographic claims, or findings.

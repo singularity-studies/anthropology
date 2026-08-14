@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/singularity-studies/anthropology/schemas/public-artifact.schema.json",
+  "title": "Public artifact sidecar metadata",
+  "type": "object",
+  "x-instrument-version": "0.2.0-draft",
+  "additionalProperties": false,
+  "required": ["metadata_version", "artifact_path", "participant_derived", "release_record_id"],
+  "properties": {
+    "metadata_version": {"type": "string", "minLength": 1},
+    "artifact_path": {"type": "string", "pattern": "^public/"},
+    "participant_derived": {"type": "boolean"},
+    "release_record_id": {"type": ["string", "null"]}
+  }
+}

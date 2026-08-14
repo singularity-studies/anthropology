@@ -1,0 +1,40 @@
+{
+  "readiness_version": "0.2.0-draft",
+  "status": "FIELDWORK_NOT_AUTHORIZED",
+  "execution_permitted": false,
+  "determinations": {
+    "ethics_or_research_review": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    },
+    "consent_or_lawful_alternative": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    },
+    "data_management_plan": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    },
+    "privacy_and_deidentification_plan": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    },
+    "withdrawal_and_correction_process": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    },
+    "nonpublic_access_and_storage_plan": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    },
+    "public_release_and_disclosure_review": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    },
+    "responsible_research_role": {
+      "record_reference": null,
+      "note": "No public determination record is referenced."
+    }
+  },
+  "external_requirements_notice": "Repository validation documents internal readiness only. It cannot grant, replace, or substantively validate external ethics, legal, institutional, community, professional, or contractual approval."
+}
